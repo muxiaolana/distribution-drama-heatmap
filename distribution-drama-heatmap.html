@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>分销剧单热度榜</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            accent: '#7c3aed',
+            'accent-50': '#f5f3ff',
+            'accent-100': '#ede9fe',
+            'accent-200': '#ddd6fe',
+            'accent-500': '#8b5cf6',
+            'accent-600': '#7c3aed',
+            'accent-700': '#6d28d9',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .sortable { cursor: pointer; user-select: none; }
+    .sortable:hover { color: #7c3aed; }
+    .sort-icon { display: inline-block; width: 16px; text-align: center; color: #94a3b8; }
+    .sort-active .sort-icon { color: #7c3aed; }
+    .cover-thumb { transition: transform .2s, box-shadow .2s; }
+    .cover-thumb:hover { transform: scale(1.03); box-shadow: 0 8px 20px rgba(124,58,237,.18); }
+    .card-row { transition: all .15s; }
+    .card-row:hover { background-color: #f8fafc; }
+    .preview-video { aspect-ratio: 9/16; max-height: 520px; background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-700 min-h-screen">
+
+  <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">分销剧单热度榜</h1>
+        <p class="text-sm text-slate-500 mt-1">追踪分销剧单素材在各渠道的热度表现</p>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1.5">上传日期</label>
+          <div class="flex items-center gap-2">
+            <input type="date" id="filter-date-start" class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-200 focus:border-accent-500">
+            <span class="text-slate-400">-</span>
+            <input type="date" id="filter-date-end" class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-200 focus:border-accent-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1.5">素材 ID</label>
+          <input type="text" id="filter-id" placeholder="输入素材 ID" class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-200 focus:border-accent-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1.5">剧 ID</label>
+          <input type="text" id="filter-drama-id" placeholder="输入剧 ID" class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-200 focus:border-accent-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1.5">剧名</label>
+          <input type="text" id="filter-drama-name" placeholder="输入剧名" class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-200 focus:border-accent-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1.5">名称包含</label>
+          <input type="text" id="filter-include" placeholder="素材名称关键词" class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-200 focus:border-accent-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1.5">名称排除</label>
+          <input type="text" id="filter-exclude" placeholder="排除关键词" class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-200 focus:border-accent-500">
+        </div>
+        <div class="flex gap-2 lg:col-span-3 lg:justify-end">
+          <button onclick="applyFilters()" class="px-6 py-2 text-sm font-medium rounded-lg bg-accent-600 text-white hover:bg-accent-700">查询</button>
+          <button onclick="resetFilters()" class="px-6 py-2 text-sm font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table View -->
+    <div id="table-view" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead class="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+            <tr>
+              <th class="px-4 py-3 whitespace-nowrap">素材封面</th>
+              <th class="px-4 py-3 min-w-[240px]">名称</th>
+              <th class="px-4 py-3 whitespace-nowrap">素材 ID</th>
+              <th class="px-4 py-3 whitespace-nowrap">剧 ID</th>
+              <th class="px-4 py-3 whitespace-nowrap">剧名</th>
+              <th class="px-4 py-3 whitespace-nowrap sortable text-right" onclick="sortBy('heat')">热度 <span class="sort-icon" id="icon-heat">↓</span></th>
+              <th class="px-4 py-3 whitespace-nowrap sortable text-right" onclick="sortBy('likes')">点赞 <span class="sort-icon" id="icon-likes">⇅</span></th>
+              <th class="px-4 py-3 whitespace-nowrap sortable text-right" onclick="sortBy('comments')">评论 <span class="sort-icon" id="icon-comments">⇅</span></th>
+              <th class="px-4 py-3 whitespace-nowrap sortable text-right" onclick="sortBy('shares')">分享 <span class="sort-icon" id="icon-shares">⇅</span></th>
+              <th class="px-4 py-3 whitespace-nowrap sortable text-right" onclick="sortBy('favorites')">收藏 <span class="sort-icon" id="icon-favorites">⇅</span></th>
+              <th class="px-4 py-3 whitespace-nowrap">上传日期</th>
+            </tr>
+          </thead>
+          <tbody id="table-body" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+      <div id="table-empty" class="hidden py-16 text-center text-slate-400">
+        <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        未找到符合条件的素材
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview Modal -->
+  <div id="preview-modal" class="fixed inset-0 z-50 hidden" aria-modal="true">
+    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closePreview()"></div>
+    <div class="relative z-10 flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row">
+        <div class="w-full md:w-[360px] bg-black flex items-center justify-center p-4">
+          <div class="preview-video rounded-xl w-full flex items-center justify-center relative">
+            <img id="preview-cover" src="" alt="" class="absolute inset-0 w-full h-full object-cover rounded-xl opacity-80">
+            <button class="relative z-10 w-16 h-16 rounded-full bg-white/90 text-accent-700 flex items-center justify-center hover:scale-110 transition shadow-lg">
+              <svg class="w-7 h-7 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+            <div class="absolute bottom-3 right-3 text-xs text-white/90 bg-black/40 px-2 py-1 rounded">00:32</div>
+          </div>
+        </div>
+        <div class="flex-1 p-6 flex flex-col">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <div class="text-xs text-slate-400 mb-1" id="preview-id">素材ID: -</div>
+              <h3 class="text-lg font-bold text-slate-900" id="preview-name">-</h3>
+              <div class="text-xs text-slate-500 mt-1.5 flex flex-wrap items-center gap-2">
+                <span class="px-2 py-0.5 rounded-full bg-accent-50 text-accent-700 font-medium" id="preview-drama-name">-</span>
+                <span class="font-mono text-slate-400" id="preview-drama-id">剧ID -</span>
+              </div>
+            </div>
+            <button onclick="closePreview()" class="text-slate-400 hover:text-slate-600">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="grid grid-cols-3 gap-3 mb-6">
+            <div class="bg-slate-50 rounded-lg p-3 text-center">
+              <div class="text-xs text-slate-500 mb-1">热度</div>
+              <div class="text-lg font-bold text-accent-600" id="preview-heat">-</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-3 text-center">
+              <div class="text-xs text-slate-500 mb-1">点赞</div>
+              <div class="text-lg font-bold text-slate-900" id="preview-likes">-</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-3 text-center">
+              <div class="text-xs text-slate-500 mb-1">评论</div>
+              <div class="text-lg font-bold text-slate-900" id="preview-comments">-</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-3 text-center">
+              <div class="text-xs text-slate-500 mb-1">分享</div>
+              <div class="text-lg font-bold text-slate-900" id="preview-shares">-</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-3 text-center">
+              <div class="text-xs text-slate-500 mb-1">收藏</div>
+              <div class="text-lg font-bold text-slate-900" id="preview-favorites">-</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-3 text-center">
+              <div class="text-xs text-slate-500 mb-1">上传日期</div>
+              <div class="text-lg font-bold text-slate-900" id="preview-date">-</div>
+            </div>
+          </div>
+          <div class="mt-auto pt-4 border-t border-slate-100 flex justify-end gap-3">
+            <button onclick="closePreview()" class="px-5 py-2 text-sm font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">关闭</button>
+            <button class="px-5 py-2 text-sm font-medium rounded-lg bg-accent-600 text-white hover:bg-accent-700">查看详情</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const names = [
+      '错嫁豪门：总裁的替身新娘', '重生后我成了顶流', '闪婚老公是隐藏大佬', '庶女有毒：王爷请自重',
+      '离婚后我爆红全网', '腹黑总裁的小娇妻', '穿越之我在后宫当团宠', '替身娇妻带球跑',
+      '病娇王爷追妻火葬场', '契约成婚：总裁夫人要离婚', '天降萌宝：爹地请接招', '弃妃逆袭：冷王宠上天'
+    ];
+
+    const rawData = Array.from({ length: 32 }, (_, i) => {
+      const likes = Math.floor(Math.random() * 800000) + 5000;
+      const comments = Math.floor(likes * (Math.random() * 0.08 + 0.01));
+      const shares = Math.floor(likes * (Math.random() * 0.05 + 0.005));
+      const favorites = Math.floor(likes * (Math.random() * 0.06 + 0.008));
+      const heat = Math.floor(likes * 0.35 + comments * 1.2 + shares * 2.5 + favorites * 1.8);
+      const date = new Date();
+      date.setDate(date.getDate() - Math.floor(Math.random() * 30));
+      const dramaIndex = i % names.length;
+      return {
+        id: `DR${String(100001 + i).slice(1)}`,
+        dramaId: `JD${String(10001 + dramaIndex).slice(1)}`,
+        dramaName: names[dramaIndex],
+        name: `${names[dramaIndex]} ${String.fromCharCode(65 + (i % 26))}${Math.floor(i / 26) || ''}`,
+        cover: `https://picsum.photos/seed/DR${String(100001 + i).slice(1)}/400/600`,
+        heat,
+        likes,
+        comments,
+        shares,
+        favorites,
+        date: date.toISOString().slice(0, 10)
+      };
+    });
+
+    let state = {
+      sortKey: 'heat',
+      sortDesc: true,
+      filtered: [...rawData]
+    };
+
+    const fmt = (n) => {
+      if (n >= 10000) return (n / 10000).toFixed(1) + 'w';
+      return n.toLocaleString();
+    };
+
+    function applyFilters() {
+      const start = document.getElementById('filter-date-start').value;
+      const end = document.getElementById('filter-date-end').value;
+      const idQuery = document.getElementById('filter-id').value.trim().toLowerCase();
+      const dramaIdQuery = document.getElementById('filter-drama-id').value.trim().toLowerCase();
+      const dramaNameQuery = document.getElementById('filter-drama-name').value.trim().toLowerCase();
+      const include = document.getElementById('filter-include').value.trim().toLowerCase();
+      const exclude = document.getElementById('filter-exclude').value.trim().toLowerCase();
+
+      state.filtered = rawData.filter(item => {
+        if (start && item.date < start) return false;
+        if (end && item.date > end) return false;
+        if (idQuery && !item.id.toLowerCase().includes(idQuery)) return false;
+        if (dramaIdQuery && !item.dramaId.toLowerCase().includes(dramaIdQuery)) return false;
+        if (dramaNameQuery && !item.dramaName.toLowerCase().includes(dramaNameQuery)) return false;
+        if (include && !item.name.toLowerCase().includes(include)) return false;
+        if (exclude && item.name.toLowerCase().includes(exclude)) return false;
+        return true;
+      });
+      sortData();
+    }
+
+    function resetFilters() {
+      document.getElementById('filter-date-start').value = '';
+      document.getElementById('filter-date-end').value = '';
+      document.getElementById('filter-id').value = '';
+      document.getElementById('filter-drama-id').value = '';
+      document.getElementById('filter-drama-name').value = '';
+      document.getElementById('filter-include').value = '';
+      document.getElementById('filter-exclude').value = '';
+      state.filtered = [...rawData];
+      sortData();
+    }
+
+    function sortBy(key) {
+      if (state.sortKey === key) {
+        state.sortDesc = !state.sortDesc;
+      } else {
+        state.sortKey = key;
+        state.sortDesc = true;
+      }
+      sortData();
+    }
+
+    function sortData() {
+      state.filtered.sort((a, b) => {
+        const diff = a[state.sortKey] - b[state.sortKey];
+        return state.sortDesc ? -diff : diff;
+      });
+      render();
+    }
+
+    function updateSortIcons() {
+      ['heat', 'likes', 'comments', 'shares', 'favorites'].forEach(key => {
+        const icon = document.getElementById('icon-' + key);
+        const th = icon.closest('th');
+        if (state.sortKey === key) {
+          icon.textContent = state.sortDesc ? '↓' : '↑';
+          th.classList.add('sort-active');
+        } else {
+          icon.textContent = '⇅';
+          th.classList.remove('sort-active');
+        }
+      });
+    }
+
+    function openPreview(item) {
+      document.getElementById('preview-cover').src = item.cover;
+      document.getElementById('preview-id').textContent = '素材ID: ' + item.id;
+      document.getElementById('preview-name').textContent = item.name;
+      document.getElementById('preview-drama-name').textContent = item.dramaName;
+      document.getElementById('preview-drama-id').textContent = '剧ID ' + item.dramaId;
+      document.getElementById('preview-heat').textContent = fmt(item.heat);
+      document.getElementById('preview-likes').textContent = fmt(item.likes);
+      document.getElementById('preview-comments').textContent = fmt(item.comments);
+      document.getElementById('preview-shares').textContent = fmt(item.shares);
+      document.getElementById('preview-favorites').textContent = fmt(item.favorites);
+      document.getElementById('preview-date').textContent = item.date;
+      document.getElementById('preview-modal').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closePreview() {
+      document.getElementById('preview-modal').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('table-body');
+      const empty = document.getElementById('table-empty');
+      updateSortIcons();
+      if (state.filtered.length === 0) {
+        tbody.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+      empty.classList.add('hidden');
+      tbody.innerHTML = state.filtered.map(item => `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3">
+            <img src="${item.cover}" alt="" onclick='openPreview(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="cover-thumb w-12 h-16 object-cover rounded bg-slate-100 cursor-pointer">
+          </td>
+          <td class="px-4 py-3">
+            <div class="font-medium text-slate-900 truncate max-w-[260px]" title="${item.name}">${item.name}</div>
+          </td>
+          <td class="px-4 py-3 font-mono text-slate-500">${item.id}</td>
+          <td class="px-4 py-3 font-mono text-slate-500">${item.dramaId}</td>
+          <td class="px-4 py-3 text-slate-700 whitespace-nowrap">${item.dramaName}</td>
+          <td class="px-4 py-3 text-right font-semibold text-accent-700">${fmt(item.heat)}</td>
+          <td class="px-4 py-3 text-right text-slate-700">${fmt(item.likes)}</td>
+          <td class="px-4 py-3 text-right text-slate-700">${fmt(item.comments)}</td>
+          <td class="px-4 py-3 text-right text-slate-700">${fmt(item.shares)}</td>
+          <td class="px-4 py-3 text-right text-slate-700">${fmt(item.favorites)}</td>
+          <td class="px-4 py-3 whitespace-nowrap text-slate-500">${item.date}</td>
+        </tr>
+      `).join('');
+    }
+
+    function render() {
+      renderTable();
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closePreview();
+    });
+
+    applyFilters();
+
+    // URL 参数支持（仅用于验证截图）
+    const params = new URLSearchParams(location.search);
+    if (params.get('preview') === '1' && state.filtered.length) openPreview(state.filtered[0]);
+  </script>
+</body>
+</html>
